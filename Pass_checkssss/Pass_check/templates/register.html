@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sunderland Secure Register</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; background: #f0f2f5; padding-top: 50px; }
+        .card { background: white; padding: 30px; border-radius: 12px; width: 380px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .captcha-box { background: #fafafa; border: 1px solid #ddd; padding: 15px; margin: 15px 0; text-align: center; border-radius: 8px; }
+        .controls { display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 10px; }
+        .refresh-btn { cursor: pointer; background: #eee; border: 1px solid #ccc; padding: 5px 10px; border-radius: 4px; font-size: 11px; }
+        .timer { font-size: 11px; font-weight: bold; color: #666; }
+        .msg { padding: 10px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; text-align: center; border: 1px solid transparent; }
+        .error { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+        .success { background: #dcfce7; color: #16a34a; border-color: #86efac; }
+        input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+        .captcha-input { font-weight: bold; transition: color 0.3s, border 0.3s; color: black; }
+        .is-valid { color: #27ae60 !important; border: 2px solid #27ae60 !important; }
+        .is-invalid { color: #c0392b !important; border: 2px solid #c0392b !important; }
+        button[type="submit"] { width: 100%; padding: 12px; background: #2c3e50; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+        button:disabled { background: #95a5a6; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h3>User Registration</h3>
+        {% if message %} <div class="msg {{ status_class }}">{{ message }}</div> {% endif %}
+        
+        <form method="POST">
+            <input type="text" name="username" placeholder="Username" required autocomplete="off">
+            <input type="password" name="password" placeholder="Password" required>
+            
+            <div class="captcha-box">
+                <img src="{{ url_for('captcha_route') }}" id="captcha-img" alt="Captcha">
+                <div class="controls">
+                    <span id="timer-display" class="timer">Refreshing in 30s</span>
+                    <button type="button" class="refresh-btn" onclick="manualRefresh()">Refresh Now</button>
+                </div>
+                <input type="text" name="captcha" id="captcha-input" class="captcha-input" 
+                       placeholder="Enter CAPTCHA Code" maxlength="5" required autocomplete="off">
+            </div>
+            
+            <button type="submit" id="submit-btn" disabled>Create Account</button>
+        </form>
+    </div>
+
+    <script>
+        let timeLeft = 30;
+        const captchaInput = document.getElementById('captcha-input');
+        const submitBtn = document.getElementById('submit-btn');
+
+        function refreshCaptcha() {
+            document.getElementById('captcha-img').src = "{{ url_for('captcha_route') }}?" + new Date().getTime();
+            timeLeft = 30;
+            captchaInput.value = "";
+            captchaInput.classList.remove('is-valid', 'is-invalid');
+            submitBtn.disabled = true;
+        }
+
+        function manualRefresh() { refreshCaptcha(); }
+
+        // 1. Countdown Logic with Typing Lock
+        setInterval(() => {
+            if (captchaInput.value.length === 0) {
+                timeLeft--;
+                document.getElementById('timer-display').innerText = "Refreshing in " + timeLeft + "s";
+                if (timeLeft <= 0) refreshCaptcha();
+            } else {
+                document.getElementById('timer-display').innerText = "Refresh Paused (Typing...)";
+            }
+        }, 1000);
+
+        // 2. Real-time Color Validation Logic
+        captchaInput.addEventListener('input', async function() {
+            const val = this.value.trim();
+            if (val.length < 5) {
+                this.classList.remove('is-valid', 'is-invalid');
+                submitBtn.disabled = true;
+                return;
+            }
+
+            const response = await fetch('/check-captcha', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ captcha: val })
+            });
+            const data = await response.json();
+
+            if (data.valid) {
+                this.classList.add('is-valid');
+                this.classList.remove('is-invalid');
+                submitBtn.disabled = false;
+            } else {
+                this.classList.add('is-invalid');
+                this.classList.remove('is-valid');
+                submitBtn.disabled = true;
+            }
+        });
+    </script>
+</body>
+</html>
